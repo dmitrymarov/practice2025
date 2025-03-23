@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Desk | Система обработки запросов</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">Служба поддержки</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.decision_tree') }}">Диалоговый модуль</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.search') }}">Поиск решений</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('main.servicedesk') }}">Заявки</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h3 class="mb-0">Управление заявками</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <h4>Создать новую заявку</h4>
+                            <button id="new-ticket-btn" class="btn btn-primary">Создать заявку</button>
+                        </div>
+                        
+                        <div id="ticket-list" class="mt-4">
+                            <h4>Мои заявки</h4>
+                            <div class="alert alert-info">
+                                В этой демо-версии заявки хранятся в памяти и будут видны только в текущей сессии.
+                            </div>
+                            <div id="tickets-container">
+                                <div class="text-center text-muted py-4">
+                                    <p>У вас пока нет заявок</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="ticket-form" class="card d-none">
+                    <div class="card-header bg-info text-white">
+                        <h4 class="mb-0">Новая заявка</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="ticket-subject" class="form-label">Тема заявки</label>
+                            <input type="text" class="form-control" id="ticket-subject" placeholder="Введите тему заявки">
+                        </div>
+                        <div class="mb-3">
+                            <label for="ticket-description" class="form-label">Описание проблемы</label>
+                            <textarea class="form-control" id="ticket-description" rows="3" placeholder="Опишите вашу проблему подробнее"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="ticket-priority" class="form-label">Приоритет</label>
+                            <select class="form-select" id="ticket-priority">
+                                <option value="low">Низкий</option>
+                                <option value="normal" selected>Обычный</option>
+                                <option value="high">Высокий</option>
+                                <option value="urgent">Срочный</option>
+                            </select>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button id="cancel-ticket" class="btn btn-secondary me-2">Отмена</button>
+                            <button id="submit-ticket" class="btn btn-info">Отправить заявку</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="ticket-details" class="card d-none">
+                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">Детали заявки</h4>
+                        <button id="back-to-list" class="btn btn-sm btn-light">Назад к списку</button>
+                    </div>
+                    <div class="card-body">
+                        <h5 id="ticket-details-subject" class="card-title"></h5>
+                        <div class="mb-3">
+                            <span id="ticket-details-status" class="badge bg-secondary"></span>
+                            <span id="ticket-details-priority" class="badge bg-primary ms-2"></span>
+                            <span id="ticket-details-date" class="text-muted ms-2"></span>
+                        </div>
+                        
+                        <div class="card mb-3">
+                            <div class="card-header">Описание</div>
+                            <div class="card-body">
+                                <p id="ticket-details-description" class="card-text"></p>
+                            </div>
+                        </div>
+                        
+                        <div id="ticket-comments-section">
+                            <h5>Комментарии</h5>
+                            <div id="ticket-comments" class="mb-3"></div>
+                            
+                            <div class="mb-3">
+                                <label for="new-comment" class="form-label">Добавить комментарий</label>
+                                <textarea class="form-control" id="new-comment" rows="2"></textarea>
+                            </div>
+                            <button id="add-comment" class="btn btn-primary">Отправить комментарий</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="mt-5 py-3 bg-light text-center">
+        <div class="container">
+            <p class="mb-0">© 2025 Система обработки запросов | Учебный проект</p>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Глобальные переменные
+        let currentTicketId = null;
+        let tickets = [];
+        
+        $(document).ready(function() {
+            // Показать форму создания заявки
+            $('#new-ticket-btn').click(function() {
+                $('#ticket-form').removeClass('d-none');
+                $('#ticket-details').addClass('d-none');
+            });
+            
+            // Отмена создания заявки
+            $('#cancel-ticket').click(function() {
+                $('#ticket-form').addClass('d-none');
+                clearTicketForm();
+            });
+            
+            // Создание заявки
+            $('#submit-ticket').click(function() {
+                const ticketData = {
+                    subject: $('#ticket-subject').val(),
+                    description: $('#ticket-description').val(),
+                    priority: $('#ticket-priority').val(),
+                    project_id: 1
+                };
+                
+                $.ajax({
+                    url: '/api/tickets',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(ticketData),
+                    success: function(response) {
+                        tickets.push(response);
+                        updateTicketsList();
+                        $('#ticket-form').addClass('d-none');
+                        clearTicketForm();
+                        alert(`Заявка #${response.id} успешно создана!`);
+                    },
+                    error: function() {
+                        alert('Произошла ошибка при создании заявки');
+                    }
+                });
+            });
+            
+            // Возврат к списку заявок
+            $('#back-to-list').click(function() {
+                $('#ticket-details').addClass('d-none');
+                currentTicketId = null;
+            });
+            
+            // Добавление комментария
+            $('#add-comment').click(function() {
+                const comment = $('#new-comment').val().trim();
+                if (!comment) return;
+                
+                if (currentTicketId) {
+                    $.ajax({
+                        url: `/api/tickets/${currentTicketId}/comment`,
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ comment: comment }),
+                        success: function() {
+                            // Обновляем заявку
+                            for (let i = 0; i < tickets.length; i++) {
+                                if (tickets[i].id === currentTicketId) {
+                                    if (!tickets[i].comments) {
+                                        tickets[i].comments = [];
+                                    }
+                                    tickets[i].comments.push({
+                                        text: comment,
+                                        created_on: new Date().toISOString()
+                                    });
+                                    showTicketDetails(tickets[i]);
+                                    break;
+                                }
+                            }
+                            $('#new-comment').val('');
+                        },
+                        error: function() {
+                            alert('Ошибка при добавлении комментария');
+                        }
+                    });
+                }
+            });
+            
+            // Обработка клика по заявке
+            $(document).on('click', '.ticket-item', function() {
+                const ticketId = $(this).data('ticket-id');
+                currentTicketId = ticketId;
+                
+                // Найти заявку в массиве
+                const ticket = tickets.find(t => t.id === ticketId);
+                if (ticket) {
+                    showTicketDetails(ticket);
+                }
+            });
+            
+            // Инициализация - загрузить список заявок
+            updateTicketsList();
+        });
+        
+        // Очистка формы заявки
+        function clearTicketForm() {
+            $('#ticket-subject').val('');
+            $('#ticket-description').val('');
+            $('#ticket-priority').val('normal');
+        }
+        
+        // Обновление списка заявок
+        function updateTicketsList() {
+            const container = $('#tickets-container');
+            
+            if (tickets.length === 0) {
+                container.html('<div class="text-center text-muted py-4"><p>У вас пока нет заявок</p></div>');
+                return;
+            }
+            
+            container.empty();
+            
+            // Сортировка заявок по дате (новые сверху)
+            tickets.sort((a, b) => {
+                return new Date(b.created_on) - new Date(a.created_on);
+            });
+            
+            tickets.forEach(ticket => {
+                const priorityClass = getPriorityClass(ticket.priority);
+                const statusClass = getStatusClass(ticket.status);
+                
+                container.append(`
+                    <div class="card mb-2 ticket-item" data-ticket-id="${ticket.id}">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">#${ticket.id}: ${ticket.subject}</h5>
+                                <span class="badge ${statusClass}">${ticket.status || 'new'}</span>
+                            </div>
+                            <div class="d-flex mt-2">
+                                <span class="badge ${priorityClass} me-2">${ticket.priority}</span>
+                                <small class="text-muted">${formatDate(ticket.created_on)}</small>
+                            </div>
+                        </div>
+                    </div>
+                `);
+            });
+        }
+        
+        // Показать детали заявки
+        function showTicketDetails(ticket) {
+            $('#ticket-details-subject').text(`#${ticket.id}: ${ticket.subject}`);
+            $('#ticket-details-status').text(ticket.status || 'new');
+            $('#ticket-details-status').attr('class', `badge ${getStatusClass(ticket.status)}`);
+            $('#ticket-details-priority').text(ticket.priority);
+            $('#ticket-details-priority').attr('class', `badge ${getPriorityClass(ticket.priority)} ms-2`);
+            $('#ticket-details-date').text(formatDate(ticket.created_on));
+            $('#ticket-details-description').text(ticket.description);
+            
+            // Комментарии
+            const commentsContainer = $('#ticket-comments');
+            commentsContainer.empty();
+            
+            if (ticket.comments && ticket.comments.length > 0) {
+                ticket.comments.forEach(comment => {
+                    commentsContainer.append(`
+                        <div class="card mb-2">
+                            <div class="card-body">
+                                <p class="card-text">${comment.text}</p>
+                                <small class="text-muted">${formatDate(comment.created_on)}</small>
+                            </div>
+                        </div>
+                    `);
+                });
+            } else {
+                commentsContainer.html('<p class="text-muted">Нет комментариев</p>');
+            }
+            
+            $('#ticket-details').removeClass('d-none');
+            $('#ticket-form').addClass('d-none');
+            
+            // Прокрутка к деталям
+            $('html, body').animate({
+                scrollTop: $('#ticket-details').offset().top - 20
+            }, 300);
+        }
+        
+        // Получить класс для отображения приоритета
+        function getPriorityClass(priority) {
+            switch (priority) {
+                case 'low':
+                    return 'bg-secondary';
+                case 'normal':
+                    return 'bg-primary';
+                case 'high':
+                    return 'bg-warning';
+                case 'urgent':
+                    return 'bg-danger';
+                default:
+                    return 'bg-primary';
+            }
+        }
+        
+        // Получить класс для отображения статуса
+        function getStatusClass(status) {
+            switch (status) {
+                case 'new':
+                    return 'bg-info';
+                case 'in_progress':
+                    return 'bg-primary';
+                case 'resolved':
+                    return 'bg-success';
+                case 'closed':
+                    return 'bg-secondary';
+                default:
+                    return 'bg-info';
+            }
+        }
+        
+        // Форматирование даты
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            
+            const date = new Date(dateStr);
+            return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+        }
+    </script>
+</body>
+</html>
