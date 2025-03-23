@@ -47,12 +47,9 @@ docker-compose up -d
 │       ├──  search.html
 │       └──  servicedesk.html
 ├──  docker-compose.yml
-├──  generate_structure.py
 ├──  graph_data.json
-├──  mediawiki_content_creator.py
 ├──  mediawiki_indexer.py
 ├──  requirements.txt
 ├──  run.py
-├──  test_conn.py
 ├──  tickets_storage.json
 ```
