@@ -97,19 +97,37 @@ def index_mediawiki():
     else:
         return jsonify({'error': 'Failed to index MediaWiki content'}), 500
 
-# API для работы с Service Desk
-@bp.route('/api/tickets', methods=['POST'])
-def create_ticket():
-    """Создать заявку"""
-    data = request.json
-    ticket = service_desk.create_ticket(
-        subject=data.get('subject', ''),
-        description=data.get('description', ''),
-        priority=data.get('priority', 'normal'),
-        assigned_to=data.get('assigned_to'),
-        project_id=data.get('project_id', 1)
-    )
-    return jsonify(ticket)
+@bp.route('/api/tickets', methods=['GET', 'POST'])
+def tickets_api():
+    """Работа с заявками: получение списка или создание новой"""
+    if request.method == 'POST':
+        # Создать заявку
+        try:
+            data = request.json
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+                
+            # Добавляем текущую дату создания, если её нет
+            if 'created_on' not in data:
+                from datetime import datetime
+                data['created_on'] = datetime.now().isoformat()
+                
+            # Создаем заявку
+            ticket = service_desk.create_ticket(
+                subject=data.get('subject', ''),
+                description=data.get('description', ''),
+                priority=data.get('priority', 'normal'),
+                assigned_to=data.get('assigned_to'),
+                project_id=data.get('project_id', 1)
+            )
+            
+            return jsonify(ticket)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    else:
+        # Получить список заявок
+        tickets = service_desk.get_all_tickets()
+        return jsonify(tickets)
 
 @bp.route('/api/tickets/<int:ticket_id>', methods=['GET'])
 def get_ticket(ticket_id):
