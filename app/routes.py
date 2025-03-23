@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, current_app
-from app import decision_graph, search_module, service_desk
+from app import decision_graph, search_module, service_desk, SearchModule
 
 bp = Blueprint('main', __name__)
 
@@ -44,19 +44,38 @@ def get_node(node_id):
         'children': children
     })
 
-# API для модуля поиска
 @bp.route('/api/search', methods=['POST'])
 def search_api():
     """Поиск решений через оригинальный модуль поиска"""
     try:
         # Получаем данные запроса
-        query = request.json.get('query', '')
-        # Выполняем поиск через модуль поиска, включая поиск в MediaWiki
-        results = search_module.search(
-            query_text=query,
-            mediawiki_url=current_app.config.get('MEDIAWIKI_URL')
-        )
-        # Отправляем результаты поиска
+        data = request.json
+        query = data.get('query', '')
+        sources = data.get('sources', ['opensearch', 'mediawiki', 'mock'])
+        use_mock = 'mock' in sources and 'opensearch' not in sources
+        results = []
+        if 'opensearch' in sources and not use_mock:
+            temp_search = SearchModule(
+                host=current_app.config.get('OPENSEARCH_HOST'),
+                port=current_app.config.get('OPENSEARCH_PORT'),
+                index_name=current_app.config.get('OPENSEARCH_INDEX'),
+                use_mock=False
+            )
+            opensearch_results = temp_search._search_opensearch(query)
+            results.extend(opensearch_results)
+
+        if 'mediawiki' in sources:
+            mediawiki_url = current_app.config.get('MEDIAWIKI_URL')
+            if mediawiki_url:
+                mediawiki_results = search_module.search_mediawiki(
+                    query_text=query,
+                    base_url=mediawiki_url
+                )
+                results.extend(mediawiki_results)
+        if 'mock' in sources:
+            mock_results = search_module._search_mock(query)
+            results.extend(mock_results)
+        results.sort(key=lambda x: x.get('score', 0), reverse=True)
         return jsonify({'results': results})
     except Exception as e:
         return jsonify({'error': str(e), 'results': []}), 500

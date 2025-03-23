@@ -1,6 +1,8 @@
-from opensearchpy import OpenSearch
-import requests
 import logging
+import json
+import requests
+import re
+from opensearchpy import OpenSearch, ConnectionError, NotFoundError, RequestError
 
 logger = logging.getLogger(__name__)
 
@@ -14,20 +16,26 @@ class SearchModule:
         
         if use_mock:
             # Используем имитацию вместо реального OpenSearch для демонстрации
+            logger.info("Инициализация с использованием мок-данных")
             self._load_mock_data()
         else:
-            # Настройка реального подключения к OpenSearch
+            logger.info(f"Попытка подключения к OpenSearch: {host}:{port}")
             try:
                 self.client = OpenSearch(
                     hosts=[{'host': host, 'port': port}],
                     http_auth=None,
                     use_ssl=False,
                     verify_certs=False,
-                    ssl_show_warn=False
+                    ssl_show_warn=False,
+                    timeout=30,
+                    retry_on_timeout=True,
+                    max_retries=3
                 )
-                
-                # Создаем индекс, если он не существует
+                if not self.client.ping():
+                    raise ConnectionError("Не удалось установить соединение с OpenSearch")
+                logger.info("Подключение к OpenSearch успешно установлено")
                 if not self.client.indices.exists(index=index_name):
+                    logger.info(f"Создание индекса {index_name}")
                     self.client.indices.create(
                         index=index_name,
                         body={
@@ -45,6 +53,30 @@ class SearchModule:
                             }
                         }
                     )
+                    logger.info(f"Индекс {index_name} успешно создан")
+                else:
+                    logger.info(f"Индекс {index_name} уже существует")
+                    
+                # Проверяем, есть ли документы в индексе
+                try:
+                    count = self.client.count(index=index_name)
+                    logger.info(f"Количество документов в индексе: {count.get('count', 0)}")
+                    
+                    # Если индекс пустой, загружаем демо-данные
+                    if count.get('count', 0) == 0:
+                        logger.info("Индекс пуст, добавляем демо-данные")
+                        self._load_mock_data()
+                        for doc in self.mock_data:
+                            self.index_document(
+                                doc_id=doc['id'],
+                                title=doc['title'],
+                                content=doc['content'],
+                                tags=doc.get('tags', [])
+                            )
+                        logger.info(f"Демо-данные ({len(self.mock_data)} записей) добавлены в индекс")
+                except Exception as e:
+                    logger.error(f"Ошибка при проверке содержимого индекса: {str(e)}")
+                    
             except Exception as e:
                 logger.error(f"Ошибка при подключении к OpenSearch: {str(e)}")
                 logger.info("Использование режима моков из-за ошибки подключения")
@@ -92,6 +124,7 @@ class SearchModule:
         ]
         
         self.mock_data = mock_solutions
+        logger.info(f"Загружено {len(self.mock_data)} мок-записей")
     
     def index_document(self, doc_id, title, content, tags=None):
         """Добавить или обновить документ в индексе"""
@@ -108,8 +141,10 @@ class SearchModule:
             for i, doc in enumerate(self.mock_data):
                 if doc['id'] == doc_id:
                     self.mock_data[i] = document
+                    logger.info(f"Обновлен мок-документ: {doc_id}")
                     return
             self.mock_data.append(document)
+            logger.info(f"Добавлен мок-документ: {doc_id}")
         else:
             # Для реального OpenSearch
             try:
@@ -119,18 +154,21 @@ class SearchModule:
                     id=doc_id,
                     refresh=True
                 )
+                logger.info(f"Документ успешно проиндексирован в OpenSearch: {doc_id}")
             except Exception as e:
-                logger.error(f"Ошибка при индексации документа: {str(e)}")
+                logger.error(f"Ошибка при индексации документа {doc_id}: {str(e)}")
     
     def search_mediawiki(self, query_text, base_url=None, limit=5):
         """Выполнить поиск в MediaWiki API"""
         if not base_url:
             # Если URL MediaWiki не указан, пропускаем поиск
+            logger.debug("URL MediaWiki не указан, поиск пропущен")
             return []
         
         try:
             # Формируем URL для API поиска
             api_url = f"{base_url}/api.php"
+            logger.info(f"Поиск в MediaWiki: {api_url}?search={query_text}")
             
             # Параметры запроса
             params = {
@@ -142,7 +180,7 @@ class SearchModule:
             }
             
             # Выполняем запрос к MediaWiki API
-            response = requests.get(api_url, params=params)
+            response = requests.get(api_url, params=params, timeout=10)
             
             if response.status_code != 200:
                 logger.error(f"Ошибка при запросе к MediaWiki API: {response.status_code}")
@@ -174,42 +212,52 @@ class SearchModule:
     
     def _clean_html(self, html_text):
         """Очистка HTML-разметки из текста"""
-        import re
-        # Удаляем HTML-теги
         clean_text = re.sub(r'<[^>]+>', ' ', html_text)
-        # Удаляем лишние пробелы
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()
         return clean_text
     
     def search(self, query_text, size=10, mediawiki_url=None):
         """Выполнить полнотекстовый поиск из всех источников"""
         all_results = []
-        
-        # Логируем запрос
         logger.info(f"Поисковый запрос: '{query_text}'")
         
         # 1. Поиск в мок-данных (если включен режим моков)
         if self.use_mock:
+            logger.info("Выполняем поиск в мок-данных...")
             mock_results = self._search_mock(query_text)
+            for result in mock_results:
+                result['source'] = 'mock'
             all_results.extend(mock_results)
         
         # 2. Поиск в OpenSearch (если не используем моки)
         else:
             try:
                 opensearch_results = self._search_opensearch(query_text, size)
+                for result in opensearch_results:
+                    result['source'] = 'opensearch'
                 all_results.extend(opensearch_results)
             except Exception as e:
                 logger.error(f"Ошибка при поиске в OpenSearch: {str(e)}")
+                logger.info("Используем мок-данные из-за ошибки OpenSearch")
+                mock_results = self._search_mock(query_text)
+                for result in mock_results:
+                    result['source'] = 'mock'
+                all_results.extend(mock_results)
         
         # 3. Поиск в MediaWiki (если указан URL)
         if mediawiki_url:
-            mediawiki_results = self.search_mediawiki(query_text, mediawiki_url)
-            all_results.extend(mediawiki_results)
+            logger.info(f"Выполняем поиск в MediaWiki по URL: {mediawiki_url}")
+            try:
+                mediawiki_results = self.search_mediawiki(query_text, mediawiki_url)
+                all_results.extend(mediawiki_results)
+            except Exception as e:
+                logger.error(f"Ошибка при поиске в MediaWiki: {str(e)}")
         
         # Сортируем по релевантности
         all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
         
         # Ограничиваем количество результатов
+        logger.info(f"Найдено {len(all_results)} результатов")
         return all_results[:size]
     
     def _search_mock(self, query_text):
@@ -244,8 +292,6 @@ class SearchModule:
                     'source': doc.get('source', 'mock')
                 }
                 results.append(result)
-        
-        # Сортируем результаты по релевантности
         results.sort(key=lambda x: x['score'], reverse=True)
         logger.info(f"Найдено {len(results)} результатов в мок-данных")
         return results
@@ -258,7 +304,8 @@ class SearchModule:
                 'query': {
                     'multi_match': {
                         'query': query_text,
-                        'fields': ['title^2', 'content', 'tags^1.5']
+                        'fields': ['title^2', 'content', 'tags^1.5'],
+                        'type': 'best_fields'
                     }
                 },
                 'highlight': {
@@ -267,15 +314,12 @@ class SearchModule:
                     }
                 }
             }
-            
-            # Выполняем поиск
+            logger.info(f"Поисковый запрос к OpenSearch: {json.dumps(query)}")
             response = self.client.search(
                 index=self.index_name,
                 body=query,
                 size=size
             )
-            
-            # Обрабатываем результаты
             results = []
             for hit in response['hits']['hits']:
                 source = hit['_source']
@@ -284,19 +328,15 @@ class SearchModule:
                     'title': source.get('title', 'Без названия'),
                     'content': source.get('content', ''),
                     'score': hit['_score'],
-                    'source': source.get('source', 'opensearch'),
+                    'source': 'opensearch',  # Принудительно указываем источник
                     'url': source.get('url', '')
                 }
-                
-                # Добавляем подсветку найденных фрагментов
                 if 'highlight' in hit and 'content' in hit['highlight']:
                     result['highlight'] = hit['highlight']['content'][0]
-                
                 results.append(result)
-            
             logger.info(f"Найдено {len(results)} результатов в OpenSearch")
             return results
-            
         except Exception as e:
             logger.error(f"Ошибка при поиске в OpenSearch: {str(e)}")
+            logger.exception("Детальная информация об ошибке:")
             return []
