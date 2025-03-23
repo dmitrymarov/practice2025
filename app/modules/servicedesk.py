@@ -1,10 +1,9 @@
 import requests
+from app.modules.ticket_storage import TicketStorage
 
 class ServiceDeskModule:
     def __init__(self, api_url=None, api_key=None, use_mock=True):
         self.use_mock = use_mock
-        self.tickets = []
-        self.next_ticket_id = 1
         
         if not use_mock:
             if not api_url or not api_key:
@@ -15,6 +14,9 @@ class ServiceDeskModule:
                 "Content-Type": "application/json",
                 "X-Redmine-API-Key": api_key
             }
+        else:
+            # Используем локальное хранилище для моков
+            self.ticket_storage = TicketStorage()
     
     def create_ticket(self, subject, description, priority='normal', assigned_to=None, project_id=1):
         """
@@ -31,27 +33,15 @@ class ServiceDeskModule:
             dict: Данные созданной заявки
         """
         if self.use_mock:
-            # Имитация создания заявки
-            ticket = {
-                'id': self.next_ticket_id,
-                'subject': subject,
-                'description': description,
-                'priority': priority,
-                'status': 'new',
-                'created_on': '2025-03-22T10:00:00Z',
-                'project_id': project_id,
-                'comments': []
-            }
-            
-            if assigned_to:
-                ticket['assigned_to'] = assigned_to
-                
-            self.tickets.append(ticket)
-            self.next_ticket_id += 1
-            
-            return ticket
+            # Используем локальное хранилище
+            return self.ticket_storage.create_ticket(
+                subject=subject,
+                description=description,
+                priority=priority,
+                assigned_to=assigned_to,
+                project_id=project_id
+            )
         else:
-            # Реальное API Redmine
             issue_data = {
                 'issue': {
                     'subject': subject,
@@ -60,21 +50,17 @@ class ServiceDeskModule:
                     'priority_id': self._get_priority_id(priority)
                 }
             }
-            
             if assigned_to:
-                issue_data['issue']['assigned_to_id'] = assigned_to
-                
+                issue_data['issue']['assigned_to_id'] = assigned_to  
             response = requests.post(
                 f"{self.api_url}/issues.json",
                 headers=self.headers,
                 json=issue_data
             )
-            
             if response.status_code in (200, 201):
                 return response.json()['issue']
             else:
                 raise Exception(f"Failed to create ticket: {response.text}")
-    
     def get_ticket(self, ticket_id):
         """
         Получить заявку по ID
@@ -86,10 +72,7 @@ class ServiceDeskModule:
             dict: Данные заявки
         """
         if self.use_mock:
-            for ticket in self.tickets:
-                if ticket['id'] == ticket_id:
-                    return ticket
-            return None
+            return self.ticket_storage.get_ticket(ticket_id)
         else:
             response = requests.get(
                 f"{self.api_url}/issues/{ticket_id}.json",
@@ -101,36 +84,47 @@ class ServiceDeskModule:
             else:
                 return None
     
+    def get_all_tickets(self):
+        """
+        Получить все заявки
+        
+        Returns:
+            list: Список всех заявок
+        """
+        if self.use_mock:
+            return self.ticket_storage.get_all_tickets()
+        else:
+            response = requests.get(
+                f"{self.api_url}/issues.json",
+                headers=self.headers
+            )
+            
+            if response.status_code == 200:
+                return response.json()['issues']
+            else:
+                return []
+    
     def update_ticket(self, ticket_id, **kwargs):
         """
         Обновить заявку
-        
         Args:
             ticket_id (int): ID заявки
             **kwargs: Поля для обновления (subject, description, status, etc.)
-            
         Returns:
             bool: Успешность операции
         """
         if self.use_mock:
-            for i, ticket in enumerate(self.tickets):
-                if ticket['id'] == ticket_id:
-                    self.tickets[i].update(kwargs)
-                    return True
-            return False
+            return self.ticket_storage.update_ticket(ticket_id, **kwargs)
         else:
             issue_data = {
                 'issue': kwargs
             }
-            
             response = requests.put(
                 f"{self.api_url}/issues/{ticket_id}.json",
                 headers=self.headers,
                 json=issue_data
             )
-            
             return response.status_code == 200
-    
     def add_comment(self, ticket_id, comment):
         """
         Добавить комментарий к заявке
@@ -143,44 +137,36 @@ class ServiceDeskModule:
             bool: Успешность операции
         """
         if self.use_mock:
-            for i, ticket in enumerate(self.tickets):
-                if ticket['id'] == ticket_id:
-                    if 'comments' not in self.tickets[i]:
-                        self.tickets[i]['comments'] = []
-                    
-                    self.tickets[i]['comments'].append({
-                        'text': comment,
-                        'created_on': '2025-03-22T10:30:00Z'
-                    })
-                    return True
-            return False
+            return self.ticket_storage.add_comment(ticket_id, comment)
         else:
             issue_data = {
                 'issue': {
                     'notes': comment
                 }
             }
-            
             response = requests.put(
                 f"{self.api_url}/issues/{ticket_id}.json",
                 headers=self.headers,
                 json=issue_data
             )
-            
             return response.status_code == 200
     
-    def attach_solution(self, ticket_id, solution_text):
+    def attach_solution(self, ticket_id, solution_text, source="unknown"):
         """
         Прикрепить решение к заявке
         
         Args:
             ticket_id (int): ID заявки
             solution_text (str): Текст решения
+            source (str): Источник решения
             
         Returns:
             bool: Успешность операции
         """
-        return self.add_comment(ticket_id, f"Найденное решение: {solution_text}")
+        if self.use_mock:
+            return self.ticket_storage.attach_solution(ticket_id, solution_text, source)
+        else:
+            return self.add_comment(ticket_id, f"Найденное решение: {solution_text}\n\nИсточник: {source}")
     
     def _get_priority_id(self, priority_name):
         """Преобразует текстовый приоритет в ID для Redmine"""
@@ -190,4 +176,4 @@ class ServiceDeskModule:
             'high': 3,
             'urgent': 4
         }
-        return priorities.get(priority_name.lower(), 2)  # По умолчанию 'normal'
+        return priorities.get(priority_name.lower(), 2)

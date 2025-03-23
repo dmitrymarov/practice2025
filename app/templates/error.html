@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Система обработки запросов</title>
+    <title>Ошибка {{ code }} | Система обработки запросов</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -34,22 +34,14 @@
         <div class="row">
             <div class="col-md-8 offset-md-2">
                 <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h2 class="text-center mb-0">Система обработки запросов пользователей</h2>
+                    <div class="card-header bg-danger text-white">
+                        <h2 class="text-center mb-0">Ошибка {{ code }}</h2>
                     </div>
-                    <div class="card-body">
-                        <h4>Добро пожаловать в систему поддержки!</h4>
-                        <p>Эта система предназначена для автоматизированной обработки запросов пользователей. С её помощью вы можете:</p>
-                        <ul>
-                            <li>Найти решение вашей проблемы через диалоговый модуль</li>
-                            <li>Выполнить полнотекстовый поиск по базе решений</li>
-                            <li>Создать и отслеживать заявки в системе Service Desk</li>
-                        </ul>
-                        
-                        <div class="text-center mt-4">
-                            <a href="{{ url_for('main.decision_tree') }}" class="btn btn-primary btn-lg m-2">Начать диалог</a>
-                            <a href="{{ url_for('main.search') }}" class="btn btn-success btn-lg m-2">Поиск решений</a>
-                            <a href="{{ url_for('main.servicedesk') }}" class="btn btn-info btn-lg m-2">Управление заявками</a>
+                    <div class="card-body text-center">
+                        <h3>{{ error }}</h3>
+                        <p class="mt-4">Произошла ошибка при обработке вашего запроса.</p>
+                        <div class="mt-4">
+                            <a href="{{ url_for('main.index') }}" class="btn btn-primary">На главную</a>
                         </div>
                     </div>
                 </div>
@@ -64,6 +56,5 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

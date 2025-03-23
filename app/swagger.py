@@ -1,9 +1,3 @@
-"""
-Модуль для интеграции Swagger UI с Flask-приложением.
-Обеспечивает автоматическую генерацию OpenAPI спецификации и 
-предоставляет веб-интерфейс для просмотра и тестирования API.
-"""
-
 from flask import Blueprint, jsonify
 from flask_swagger_ui import get_swaggerui_blueprint
 from apispec import APISpec
@@ -13,6 +7,10 @@ from app.schemas import (
     NodeSchema, SearchQuerySchema, SearchResultSchema, SearchResponseSchema,
     TicketCreateSchema, CommentCreateSchema, SolutionAttachSchema, StatusResponseSchema
 )
+import logging
+
+logger = logging.getLogger(__name__)
+
 # Создаем спецификацию API
 spec = APISpec(
     title="Система обработки запросов - API",
@@ -76,328 +74,124 @@ def register_schemas():
     spec.components.schema("SolutionAttach", schema=SolutionAttachSchema)
     spec.components.schema("StatusResponse", schema=StatusResponseSchema)
 
-# Регистрация маршрутов API в спецификации
 def register_api_routes(app):
     """Регистрирует все маршруты API в спецификации OpenAPI"""
     # Сначала регистрируем схемы
     register_schemas()
     
-    # Маршрут для получения узла графа решений
-    spec.path(
-        path="/api/node/{node_id}",
-        operations={
-            "get": {
-                "tags": ["decision-tree"],
-                "summary": "Получить данные узла графа решений",
-                "description": "Возвращает информацию об узле графа решений по его ID. "
-                              "Для получения корневого узла используйте 'root' в качестве node_id.",
-                "parameters": [
-                    {
-                        "name": "node_id",
-                        "in": "path",
+    try:
+        # Получаем все зарегистрированные URL-правила
+        for rule in app.url_map.iter_rules():
+            if rule.endpoint.startswith('main.') and '/api/' in rule.rule:
+                logger.info(f"Зарегистрировано API правило: {rule.rule} ({rule.endpoint})")
+            
+        # Упрощенная версия - добавляем только документацию и конечные точки
+        spec_paths = {
+            "/api/node/{node_id}": {
+                "get": {
+                    "tags": ["decision-tree"],
+                    "summary": "Получить данные узла графа решений",
+                    "parameters": [
+                        {
+                            "name": "node_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Успешный ответ",
+                            "content": {"application/json": {}}
+                        }
+                    }
+                }
+            },
+            "/api/search": {
+                "post": {
+                    "tags": ["search"],
+                    "summary": "Поиск решений по запросу",
+                    "requestBody": {
                         "required": True,
-                        "description": "ID узла графа (или 'root' для корневого узла)",
-                        "schema": {"type": "string"}
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Успешный ответ",
-                        "content": {
-                            "application/json": {
-                                "schema": {"$ref": "#/components/schemas/Node"}
-                            }
-                        }
+                        "content": {"application/json": {}}
                     },
-                    "404": {
-                        "description": "Узел не найден",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {"type": "string"}
-                                    }
-                                },
-                                "example": {"error": "Node not found"}
-                            }
+                    "responses": {
+                        "200": {
+                            "description": "Результаты поиска",
+                            "content": {"application/json": {}}
                         }
                     }
                 }
-            }
-        },
-        path_parameters={}
-    )
-    
-    # Маршрут для поиска решений
-    spec.path(
-        path="/api/search",
-        operations={
-            "post": {
-                "tags": ["search"],
-                "summary": "Поиск решений по запросу",
-                "description": "Выполняет поиск решений на основе текстового запроса. "
-                              "Поиск осуществляется в OpenSearch и других источниках, в зависимости от настроек.",
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/SearchQuery"}
-                        }
+            },
+            "/api/tickets": {
+                "post": {
+                    "tags": ["servicedesk"],
+                    "summary": "Создать новую заявку",
+                    "responses": {
+                        "200": {"description": "Заявка создана"}
                     }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Результаты поиска",
-                        "content": {
-                            "application/json": {
-                                "schema": {"$ref": "#/components/schemas/SearchResponse"}
-                            }
+                }
+            },
+            "/api/tickets/{ticket_id}": {
+                "get": {
+                    "tags": ["servicedesk"],
+                    "summary": "Получить информацию о заявке",
+                    "parameters": [
+                        {
+                            "name": "ticket_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "integer"}
                         }
-                    },
-                    "500": {
-                        "description": "Ошибка сервера",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {"type": "string"}
-                                    }
-                                }
-                            }
+                    ],
+                    "responses": {
+                        "200": {"description": "Информация о заявке"}
+                    }
+                }
+            },
+            "/api/tickets/{ticket_id}/comment": {
+                "post": {
+                    "tags": ["servicedesk"],
+                    "summary": "Добавить комментарий к заявке",
+                    "parameters": [
+                        {
+                            "name": "ticket_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "integer"}
                         }
+                    ],
+                    "responses": {
+                        "200": {"description": "Комментарий добавлен"}
+                    }
+                }
+            },
+            "/api/tickets/{ticket_id}/solution": {
+                "post": {
+                    "tags": ["servicedesk"],
+                    "summary": "Прикрепить решение к заявке",
+                    "parameters": [
+                        {
+                            "name": "ticket_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "integer"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {"description": "Решение прикреплено"}
                     }
                 }
             }
-        },
-        path_parameters={}
-    )
-    
-    # Маршрут для создания заявки
-    spec.path(
-        path="/api/tickets",
-        operations={
-            "post": {
-                "tags": ["servicedesk"],
-                "summary": "Создать новую заявку",
-                "description": "Создает новую заявку в системе Service Desk на основе предоставленных данных.",
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/TicketCreate"}
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Заявка успешно создана",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {"type": "integer"},
-                                        "subject": {"type": "string"},
-                                        "description": {"type": "string"},
-                                        "priority": {"type": "string"},
-                                        "status": {"type": "string"},
-                                        "created_on": {"type": "string", "format": "date-time"}
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Ошибка создания заявки",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {"type": "string"}
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        path_parameters={}
-    )
-    
-    # Маршрут для получения заявки по ID
-    spec.path(
-        path="/api/tickets/{ticket_id}",
-        operations={
-            "get": {
-                "tags": ["servicedesk"],
-                "summary": "Получить информацию о заявке",
-                "description": "Возвращает подробную информацию о заявке по её ID.",
-                "parameters": [
-                    {
-                        "name": "ticket_id",
-                        "in": "path",
-                        "required": True,
-                        "description": "ID заявки",
-                        "schema": {"type": "integer"}
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Информация о заявке",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {"type": "integer"},
-                                        "subject": {"type": "string"},
-                                        "description": {"type": "string"},
-                                        "priority": {"type": "string"},
-                                        "status": {"type": "string"},
-                                        "created_on": {"type": "string", "format": "date-time"},
-                                        "comments": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "text": {"type": "string"},
-                                                    "created_on": {"type": "string", "format": "date-time"}
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Заявка не найдена",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {"type": "string"}
-                                    }
-                                },
-                                "example": {"error": "Ticket not found"}
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        path_parameters={}
-    )
-    
-    # Маршрут для добавления комментария к заявке
-    spec.path(
-        path="/api/tickets/{ticket_id}/comment",
-        operations={
-            "post": {
-                "tags": ["servicedesk"],
-                "summary": "Добавить комментарий к заявке",
-                "description": "Добавляет новый комментарий к существующей заявке.",
-                "parameters": [
-                    {
-                        "name": "ticket_id",
-                        "in": "path",
-                        "required": True,
-                        "description": "ID заявки",
-                        "schema": {"type": "integer"}
-                    }
-                ],
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/CommentCreate"}
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Комментарий успешно добавлен",
-                        "content": {
-                            "application/json": {
-                                "schema": {"$ref": "#/components/schemas/StatusResponse"}
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Ошибка при добавлении комментария",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {"type": "string"}
-                                    }
-                                },
-                                "example": {"error": "Failed to add comment"}
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        path_parameters={}
-    )
-    
-    # Маршрут для прикрепления решения к заявке
-    spec.path(
-        path="/api/tickets/{ticket_id}/solution",
-        operations={
-            "post": {
-                "tags": ["servicedesk"],
-                "summary": "Прикрепить решение к заявке",
-                "description": "Прикрепляет найденное решение к существующей заявке.",
-                "parameters": [
-                    {
-                        "name": "ticket_id",
-                        "in": "path",
-                        "required": True,
-                        "description": "ID заявки",
-                        "schema": {"type": "integer"}
-                    }
-                ],
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/SolutionAttach"}
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Решение успешно прикреплено",
-                        "content": {
-                            "application/json": {
-                                "schema": {"$ref": "#/components/schemas/StatusResponse"}
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Ошибка при прикреплении решения",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {"type": "string"}
-                                    }
-                                },
-                                "example": {"error": "Failed to attach solution"}
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        path_parameters={}
-    )
+        }
+        
+        # Добавляем пути в спецификацию напрямую
+        for path, operations in spec_paths.items():
+            spec.path(path=path, operations=operations)
+        
+        logger.info("API маршруты успешно зарегистрированы в спецификации")
+    except Exception as e:
+        logger.error(f"Ошибка при регистрации API маршрутов: {str(e)}")
+        # Не позволяем ошибке остановить приложение
+        print(f"Предупреждение: Не удалось полностью инициализировать документацию API: {str(e)}")
+        print("Swagger UI может работать некорректно. Проверьте логи для деталей.")

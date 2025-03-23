@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, current_app
-from app import decision_graph, search_module, service_desk
+from app import decision_graph, search_module, service_desk, SearchModule
 
 bp = Blueprint('main', __name__)
 
@@ -44,19 +44,38 @@ def get_node(node_id):
         'children': children
     })
 
-# API для модуля поиска
 @bp.route('/api/search', methods=['POST'])
 def search_api():
     """Поиск решений через оригинальный модуль поиска"""
     try:
         # Получаем данные запроса
-        query = request.json.get('query', '')
-        # Выполняем поиск через модуль поиска, включая поиск в MediaWiki
-        results = search_module.search(
-            query_text=query,
-            mediawiki_url=current_app.config.get('MEDIAWIKI_URL')
-        )
-        # Отправляем результаты поиска
+        data = request.json
+        query = data.get('query', '')
+        sources = data.get('sources', ['opensearch', 'mediawiki', 'mock'])
+        use_mock = 'mock' in sources and 'opensearch' not in sources
+        results = []
+        if 'opensearch' in sources and not use_mock:
+            temp_search = SearchModule(
+                host=current_app.config.get('OPENSEARCH_HOST'),
+                port=current_app.config.get('OPENSEARCH_PORT'),
+                index_name=current_app.config.get('OPENSEARCH_INDEX'),
+                use_mock=False
+            )
+            opensearch_results = temp_search._search_opensearch(query)
+            results.extend(opensearch_results)
+
+        if 'mediawiki' in sources:
+            mediawiki_url = current_app.config.get('MEDIAWIKI_URL')
+            if mediawiki_url:
+                mediawiki_results = search_module.search_mediawiki(
+                    query_text=query,
+                    base_url=mediawiki_url
+                )
+                results.extend(mediawiki_results)
+        if 'mock' in sources:
+            mock_results = search_module._search_mock(query)
+            results.extend(mock_results)
+        results.sort(key=lambda x: x.get('score', 0), reverse=True)
         return jsonify({'results': results})
     except Exception as e:
         return jsonify({'error': str(e), 'results': []}), 500
@@ -78,19 +97,37 @@ def index_mediawiki():
     else:
         return jsonify({'error': 'Failed to index MediaWiki content'}), 500
 
-# API для работы с Service Desk
-@bp.route('/api/tickets', methods=['POST'])
-def create_ticket():
-    """Создать заявку"""
-    data = request.json
-    ticket = service_desk.create_ticket(
-        subject=data.get('subject', ''),
-        description=data.get('description', ''),
-        priority=data.get('priority', 'normal'),
-        assigned_to=data.get('assigned_to'),
-        project_id=data.get('project_id', 1)
-    )
-    return jsonify(ticket)
+@bp.route('/api/tickets', methods=['GET', 'POST'])
+def tickets_api():
+    """Работа с заявками: получение списка или создание новой"""
+    if request.method == 'POST':
+        # Создать заявку
+        try:
+            data = request.json
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+                
+            # Добавляем текущую дату создания, если её нет
+            if 'created_on' not in data:
+                from datetime import datetime
+                data['created_on'] = datetime.now().isoformat()
+                
+            # Создаем заявку
+            ticket = service_desk.create_ticket(
+                subject=data.get('subject', ''),
+                description=data.get('description', ''),
+                priority=data.get('priority', 'normal'),
+                assigned_to=data.get('assigned_to'),
+                project_id=data.get('project_id', 1)
+            )
+            
+            return jsonify(ticket)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    else:
+        # Получить список заявок
+        tickets = service_desk.get_all_tickets()
+        return jsonify(tickets)
 
 @bp.route('/api/tickets/<int:ticket_id>', methods=['GET'])
 def get_ticket(ticket_id):

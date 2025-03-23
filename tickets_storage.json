@@ -1,0 +1,15 @@
+{
+  "tickets": [
+    {
+      "id": 1,
+      "subject": "Помощь с проблемой",
+      "description": "Проблема: Попробуйте переустановить приложение.",
+      "priority": "normal",
+      "status": "new",
+      "created_on": "2025-03-23T14:15:32.140292",
+      "project_id": 1,
+      "comments": []
+    }
+  ],
+  "next_id": 2
+}
