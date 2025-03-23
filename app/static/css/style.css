@@ -1,0 +1,54 @@
+/* Общие стили */
+body {
+    background-color: #f8f9fa;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+footer {
+    margin-top: auto;
+}
+
+/* Стили для диалогового модуля */
+.message-bubble {
+    max-width: 80%;
+    border-radius: 10px;
+    word-wrap: break-word;
+}
+
+.user-message .message-bubble {
+    border-top-right-radius: 0;
+}
+
+.system-message .message-bubble {
+    border-top-left-radius: 0;
+}
+
+/* Стили для заявок */
+.ticket-item {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.ticket-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Анимации */
+.card {
+    transition: box-shadow 0.3s;
+}
+
+.card:hover {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.btn {
+    transition: transform 0.2s;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
