@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, current_app
-from app.___init___ import decision_graph, search_module, service_desk
+from app import decision_graph, search_module, service_desk
 
 bp = Blueprint('main', __name__)
 
@@ -47,10 +47,36 @@ def get_node(node_id):
 # API для модуля поиска
 @bp.route('/api/search', methods=['POST'])
 def search_api():
-    """Поиск решений"""
-    query = request.json.get('query', '')
-    results = search_module.search(query)
-    return jsonify({'results': results})
+    """Поиск решений через оригинальный модуль поиска"""
+    try:
+        # Получаем данные запроса
+        query = request.json.get('query', '')
+        # Выполняем поиск через модуль поиска, включая поиск в MediaWiki
+        results = search_module.search(
+            query_text=query,
+            mediawiki_url=current_app.config.get('MEDIAWIKI_URL')
+        )
+        # Отправляем результаты поиска
+        return jsonify({'results': results})
+    except Exception as e:
+        return jsonify({'error': str(e), 'results': []}), 500
+
+# API для индексации MediaWiki контента в OpenSearch
+@bp.route('/api/index-mediawiki', methods=['POST'])
+def index_mediawiki():
+    """Индексировать статью из MediaWiki в OpenSearch"""
+    if not current_app.config['USE_MEDIAWIKI'] or current_app.config['USE_MOCK_SERVICES']:
+        return jsonify({'error': 'MediaWiki integration is not enabled'}), 400
+    
+    page_id = request.json.get('page_id')
+    if not page_id:
+        return jsonify({'error': 'Page ID is required'}), 400
+    
+    success = search_module.index_mediawiki_content(page_id)
+    if success:
+        return jsonify({'status': 'success'})
+    else:
+        return jsonify({'error': 'Failed to index MediaWiki content'}), 500
 
 # API для работы с Service Desk
 @bp.route('/api/tickets', methods=['POST'])
@@ -87,7 +113,21 @@ def add_comment(ticket_id):
 def attach_solution(ticket_id):
     """Прикрепить решение к заявке"""
     solution = request.json.get('solution', '')
-    success = service_desk.attach_solution(ticket_id, solution)
+    source = request.json.get('source', 'unknown')
+    
+    # Добавляем информацию об источнике решения
+    solution_text = f"{solution}\n\nИсточник: {get_source_label(source)}"
+    
+    success = service_desk.attach_solution(ticket_id, solution_text)
     if success:
         return jsonify({'status': 'success'})
     return jsonify({'error': 'Failed to attach solution'}), 500
+
+# Вспомогательная функция для получения читаемого названия источника
+def get_source_label(source):
+    source_labels = {
+        'opensearch': 'OpenSearch',
+        'mediawiki': 'MediaWiki',
+        'mock': 'База знаний (демо)'
+    }
+    return source_labels.get(source, 'Неизвестный источник')
