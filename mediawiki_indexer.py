@@ -1,21 +1,11 @@
-#!/usr/bin/env python3
-"""
-Скрипт для индексации страниц из MediaWiki в OpenSearch.
-Создает полнотекстовый поисковый индекс по содержимому MediaWiki.
-"""
-
 import os
 import sys
 import requests
-import json
 from opensearchpy import OpenSearch
 from dotenv import load_dotenv
 import re
 
-# Загрузка переменных окружения
 load_dotenv()
-
-# Получение настроек
 MEDIAWIKI_URL = os.environ.get('MEDIAWIKI_URL', 'http://localhost/mediawiki')
 OPENSEARCH_HOST = os.environ.get('OPENSEARCH_HOST', 'localhost')
 OPENSEARCH_PORT = int(os.environ.get('OPENSEARCH_PORT', 9200))
@@ -31,9 +21,7 @@ def get_mediawiki_pages():
             'aplimit': 500,
             'format': 'json'
         })
-        
         data = response.json()
-        
         if 'query' in data and 'allpages' in data['query']:
             pages = data['query']['allpages']
             print(f"Найдено {len(pages)} страниц")
@@ -54,20 +42,13 @@ def get_page_content(page_id):
             'prop': 'text|categories',
             'format': 'json'
         })
-        
         data = response.json()
         
         if 'parse' in data:
             parse_data = data['parse']
-            
-            # Получаем HTML-контент
             html_content = parse_data.get('text', {}).get('*', '')
-            
-            # Удаляем HTML-теги
             text_content = re.sub(r'<[^>]+>', ' ', html_content)
             text_content = re.sub(r'\s+', ' ', text_content).strip()
-            
-            # Получаем категории
             categories = []
             if 'categories' in parse_data:
                 categories = [cat.get('*', '') for cat in parse_data['categories']]
@@ -92,13 +73,9 @@ def create_opensearch_index():
             verify_certs=False,
             ssl_show_warn=False
         )
-        
-        # Проверяем существование индекса
         if client.indices.exists(index=OPENSEARCH_INDEX):
             print(f"Индекс {OPENSEARCH_INDEX} уже существует")
             return client
-        
-        # Создаем индекс с настройками для русского и английского языков
         settings = {
             "settings": {
                 "number_of_shards": 1,
@@ -164,16 +141,11 @@ def index_page(client, page):
     try:
         page_id = page['pageid']
         title = page['title']
-        
         print(f"Индексация страницы: {title} (ID: {page_id})...")
-        
-        # Получаем содержимое страницы из MediaWiki
         content_data = get_page_content(page_id)
         if not content_data:
             print(f"  Пропуск: не удалось получить содержимое")
             return False
-        
-        # Создаем документ для индексации в OpenSearch
         document = {
             'id': f"mediawiki_{page_id}",
             'title': title,
@@ -182,8 +154,6 @@ def index_page(client, page):
             'url': f"{MEDIAWIKI_URL}/index.php?curid={page_id}",
             'source': 'mediawiki'
         }
-        
-        # Индексируем документ в OpenSearch
         client.index(
             index=OPENSEARCH_INDEX,
             body=document,
@@ -201,31 +171,21 @@ def main():
     print(f"MediaWiki URL: {MEDIAWIKI_URL}")
     print(f"OpenSearch: {OPENSEARCH_HOST}:{OPENSEARCH_PORT}")
     print(f"Индекс: {OPENSEARCH_INDEX}")
-    
-    # Создаем или получаем индекс в OpenSearch
     client = create_opensearch_index()
     if not client:
         print("Не удалось подключиться к OpenSearch. Проверьте настройки.")
         sys.exit(1)
-    
-    # Получаем список страниц из MediaWiki
     pages = get_mediawiki_pages()
     if not pages:
         print("Не найдено страниц для индексации в MediaWiki.")
         sys.exit(1)
-    
     print(f"\nНачинаем индексацию {len(pages)} страниц...")
     success_count = 0
-    
-    # Индексируем каждую страницу в OpenSearch
     for page in pages:
         if index_page(client, page):
             success_count += 1
-    
     print(f"\nИндексация завершена.")
     print(f"Успешно проиндексировано: {success_count} из {len(pages)} страниц.")
-    
-    # Обновляем индекс для немедленной доступности при поиске
     client.indices.refresh(index=OPENSEARCH_INDEX)
     
 if __name__ == "__main__":

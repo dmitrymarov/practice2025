@@ -17,7 +17,7 @@ services:
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_INDEX=solutions
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Asuadmin123!
-      - MEDIAWIKI_URL=http://localhost/mediawiki
+      - MEDIAWIKI_URL=http://172.29.46.60/mediawiki
       - MEDIAWIKI_USERNAME=admin
       - MEDIAWIKI_PASSWORD=asupassword
       - GRAPH_DATA_FILE=/app/data/graph_data.json

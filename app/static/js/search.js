@@ -16,8 +16,6 @@ $(document).ready(function () {
             alert('Пожалуйста, введите поисковый запрос');
         }
     });
-
-    // Поиск при нажатии Enter в поле ввода
     $('#search-input').keypress(function (e) {
         if (e.which === 13) {
             const query = $(this).val().trim();
@@ -25,13 +23,11 @@ $(document).ready(function () {
                 console.log("Enter pressed with query:", query);
                 searchSolutions(query);
             } else {
-                // Предупреждение, если запрос пустой
                 alert('Пожалуйста, введите поисковый запрос');
             }
         }
     });
 
-    // Обработка фильтра "Все источники"
     $('#filter-all').change(function () {
         const isChecked = $(this).prop('checked');
         $('.source-filter').prop('checked', isChecked);

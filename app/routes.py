@@ -23,7 +23,6 @@ def servicedesk():
     """Страница работы с заявками"""
     return render_template('servicedesk.html')
 
-# API для диалогового модуля
 @bp.route('/api/node/<node_id>', methods=['GET'])
 def get_node(node_id):
     """Получить данные узла"""
@@ -101,18 +100,13 @@ def index_mediawiki():
 def tickets_api():
     """Работа с заявками: получение списка или создание новой"""
     if request.method == 'POST':
-        # Создать заявку
         try:
             data = request.json
             if not data:
                 return jsonify({'error': 'No data provided'}), 400
-                
-            # Добавляем текущую дату создания, если её нет
             if 'created_on' not in data:
                 from datetime import datetime
                 data['created_on'] = datetime.now().isoformat()
-                
-            # Создаем заявку
             ticket = service_desk.create_ticket(
                 subject=data.get('subject', ''),
                 description=data.get('description', ''),
@@ -120,12 +114,10 @@ def tickets_api():
                 assigned_to=data.get('assigned_to'),
                 project_id=data.get('project_id', 1)
             )
-            
             return jsonify(ticket)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     else:
-        # Получить список заявок
         tickets = service_desk.get_all_tickets()
         return jsonify(tickets)
 

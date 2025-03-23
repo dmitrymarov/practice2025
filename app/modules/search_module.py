@@ -56,13 +56,9 @@ class SearchModule:
                     logger.info(f"Индекс {index_name} успешно создан")
                 else:
                     logger.info(f"Индекс {index_name} уже существует")
-                    
-                # Проверяем, есть ли документы в индексе
                 try:
                     count = self.client.count(index=index_name)
                     logger.info(f"Количество документов в индексе: {count.get('count', 0)}")
-                    
-                    # Если индекс пустой, загружаем демо-данные
                     if count.get('count', 0) == 0:
                         logger.info("Индекс пуст, добавляем демо-данные")
                         self._load_mock_data()
@@ -146,7 +142,6 @@ class SearchModule:
             self.mock_data.append(document)
             logger.info(f"Добавлен мок-документ: {doc_id}")
         else:
-            # Для реального OpenSearch
             try:
                 self.client.index(
                     index=self.index_name,
@@ -161,16 +156,11 @@ class SearchModule:
     def search_mediawiki(self, query_text, base_url=None, limit=5):
         """Выполнить поиск в MediaWiki API"""
         if not base_url:
-            # Если URL MediaWiki не указан, пропускаем поиск
             logger.debug("URL MediaWiki не указан, поиск пропущен")
             return []
-        
         try:
-            # Формируем URL для API поиска
             api_url = f"{base_url}/api.php"
             logger.info(f"Поиск в MediaWiki: {api_url}?search={query_text}")
-            
-            # Параметры запроса
             params = {
                 'action': 'query',
                 'list': 'search',
@@ -178,8 +168,6 @@ class SearchModule:
                 'format': 'json',
                 'srlimit': limit
             }
-            
-            # Выполняем запрос к MediaWiki API
             response = requests.get(api_url, params=params, timeout=10)
             
             if response.status_code != 200:
@@ -252,11 +240,7 @@ class SearchModule:
                 all_results.extend(mediawiki_results)
             except Exception as e:
                 logger.error(f"Ошибка при поиске в MediaWiki: {str(e)}")
-        
-        # Сортируем по релевантности
         all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
-        
-        # Ограничиваем количество результатов
         logger.info(f"Найдено {len(all_results)} результатов")
         return all_results[:size]
     
@@ -267,22 +251,15 @@ class SearchModule:
         
         for doc in self.mock_data:
             score = 0
-            
-            # Проверяем наличие ключевых слов в заголовке
             if query_lower in doc['title'].lower():
                 score += 2
-            
-            # Проверяем наличие ключевых слов в содержимом
             if query_lower in doc['content'].lower():
                 score += 1
-            
-            # Проверяем наличие ключевых слов в тегах
             if 'tags' in doc:
                 for tag in doc['tags']:
                     if query_lower in tag.lower():
                         score += 1
                         break
-            
             if score > 0:
                 result = {
                     'id': doc['id'],
@@ -299,7 +276,6 @@ class SearchModule:
     def _search_opensearch(self, query_text, size=10):
         """Поиск в OpenSearch"""
         try:
-            # Формируем поисковый запрос
             query = {
                 'query': {
                     'multi_match': {

@@ -78,7 +78,6 @@ class ServiceDeskModule:
                 f"{self.api_url}/issues/{ticket_id}.json",
                 headers=self.headers
             )
-            
             if response.status_code == 200:
                 return response.json()['issue']
             else:
