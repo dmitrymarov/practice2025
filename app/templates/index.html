@@ -25,9 +25,6 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.servicedesk') }}">Заявки</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/api/docs" target="_blank">API</a>
-                    </li>
                 </ul>
             </div>
         </div>
@@ -47,14 +44,12 @@
                             <li>Найти решение вашей проблемы через диалоговый модуль</li>
                             <li>Выполнить полнотекстовый поиск по базе решений</li>
                             <li>Создать и отслеживать заявки в системе Service Desk</li>
-                            <li>Использовать программный интерфейс (API) для интеграции с другими системами</li>
                         </ul>
                         
                         <div class="text-center mt-4">
                             <a href="{{ url_for('main.decision_tree') }}" class="btn btn-primary btn-lg m-2">Начать диалог</a>
                             <a href="{{ url_for('main.search') }}" class="btn btn-success btn-lg m-2">Поиск решений</a>
                             <a href="{{ url_for('main.servicedesk') }}" class="btn btn-info btn-lg m-2">Управление заявками</a>
-                            <a href="/api/docs" class="btn btn-secondary btn-lg m-2" target="_blank">API документация</a>
                         </div>
                     </div>
                 </div>

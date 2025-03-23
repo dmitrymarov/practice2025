@@ -108,7 +108,7 @@ class TicketStorage:
                 return True
         return False
     
-    def attach_solution(self, ticket_id, solution_text, source='unknown'):
+    def attach_solution(self, ticket_id, solution_text):
         """Прикрепить решение к заявке"""
-        comment = f"Найденное решение: {solution_text}\n\nИсточник: {source}"
+        comment = f"Найденное решение: {solution_text}"
         return self.add_comment(ticket_id, comment)
